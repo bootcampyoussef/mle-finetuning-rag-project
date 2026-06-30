@@ -1,0 +1,137 @@
+"""Base and adapter-backed local answer generation."""
+
+from collections.abc import Sequence
+import re
+from typing import Protocol
+
+from peft import PeftModel
+import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+)
+
+from .config import Settings
+from .models import SearchHit
+from .prompts import evidence_text, inference_prompt
+
+
+CITATION_PATTERN = re.compile(r"\[([a-z0-9-]+)\]")
+FALLBACK_ANSWER = "The approved material is insufficient. Escalate for manual review."
+
+
+def citations_in(answer: str) -> list[str]:
+    """Extract ordered unique citation IDs from generated text."""
+
+    return list(dict.fromkeys(CITATION_PATTERN.findall(answer)))
+
+
+def citations_are_valid(answer: str, hits: Sequence[SearchHit]) -> bool:
+    """Require citations and reject source IDs absent from retrieved evidence."""
+
+    citations = citations_in(answer)
+    retrieved = {hit.document_id for hit in hits}
+    return bool(citations) and set(citations).issubset(retrieved)
+
+
+class Generator(Protocol):
+    """Generation contract used by every benchmark path."""
+
+    @property
+    def mode(self) -> str:
+        """Return a report-friendly generator label."""
+
+    def generate(self, question: str, hits: Sequence[SearchHit]) -> str:
+        """Generate an answer from a question and optional evidence."""
+
+
+class LocalModelGenerator:
+    """Generate with the unchanged base model or a loaded LoRA adapter."""
+
+    def __init__(self, settings: Settings, use_adapter: bool) -> None:
+        self.settings = settings
+        self.use_adapter = use_adapter
+        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
+            settings.base_model
+        )
+        self.tokenizer = tokenizer
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        base_model = AutoModelForCausalLM.from_pretrained(settings.base_model)
+        if use_adapter:
+            if not settings.adapter_path.exists():
+                raise FileNotFoundError(
+                    f"Adapter not found at {settings.adapter_path}. "
+                    "Run the training command first."
+                )
+            adapter_model = PeftModel.from_pretrained(
+                base_model, str(settings.adapter_path)
+            )
+            model: PreTrainedModel | PeftModel = adapter_model
+        else:
+            model = base_model
+        self.model = model
+        # Models load on CPU by default; derive the actual placement so inputs match.
+        self.device = next(self.model.parameters()).device
+        self.model.eval()
+
+    @property
+    def mode(self) -> str:
+        """Identify whether the adapter is active."""
+
+        suffix = "LoRA adapter" if self.use_adapter else "unchanged base model"
+        return f"{self.settings.base_model} with {suffix}"
+
+    def generate(self, question: str, hits: Sequence[SearchHit]) -> str:
+        """Run deterministic local generation from the shared prompt format."""
+
+        prompt = inference_prompt(
+            self.tokenizer,
+            question,
+            evidence_text(hits),
+        )
+        encoded = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=self.settings.max_sequence_length,
+        )
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
+        with torch.no_grad():
+            generated = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=self.settings.max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+        new_tokens = generated[0, input_ids.shape[1] :]
+        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+        return answer or FALLBACK_ANSWER
+
+
+class ExtractiveSmokeGenerator:
+    """Deterministic evidence answerer for tests, never final model claims."""
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+
+    @property
+    def mode(self) -> str:
+        """Label smoke output clearly in reports."""
+
+        return f"deterministic smoke generator: {self.label}"
+
+    def generate(self, question: str, hits: Sequence[SearchHit]) -> str:
+        """Return the strongest visible evidence sentence with its citation."""
+
+        del question
+        if not hits:
+            return FALLBACK_ANSWER
+        hit = hits[0]
+        sentence = hit.text.split(". ")[0].rstrip(".")
+        return f"{sentence}. [{hit.document_id}]"
