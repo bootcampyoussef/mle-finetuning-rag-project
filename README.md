@@ -14,18 +14,26 @@ It follows the earlier strategy lesson by turning the selected hybrid pattern
 into an assessed implementation with a real local fine-tuning run and a
 measured comparison against a baseline RAG system.
 
+## Learning Objectives
+
+By completing this project, you should be able to:
+
+- Build a hybrid RAG plus fine-tuned system using a real local LoRA adapter.
+- Benchmark the hybrid system against a baseline RAG pipeline on the same
+  held-out cases.
+- Separate retrieval quality from answer relevance, faithfulness, response
+  style, and abstention behavior.
+- Decide whether adaptation adds enough value to justify its training,
+  deployment, and maintenance cost.
+
 ## Learning Path
 
-1. Read the [project brief](project-description.md) and inspect the supplied
-   policy, training, and evaluation data.
-2. Build a retriever that preserves source IDs and applies a defensible
-   evidence threshold.
-3. Fine-tune the supplied small model with LoRA on the training examples.
-4. Implement both baseline RAG and hybrid RAG plus LoRA answer paths.
-5. Benchmark the systems on the same held-out cases and write an evaluation
-   report.
-6. Inspect the separate [reference solution](solution/README.md) only after
-   attempting the project.
+| File / Folder | Description |
+|---|---|
+| [**Project Brief**](project-description.md) | Scenario, milestones, deliverables, and acceptance checklist. |
+| [**Policy Sources**](data/knowledge_base/) | Build a retriever that preserves source IDs and applies an evidence threshold. |
+| [**Training Examples**](data/training/instruction_examples.jsonl) | Train a local LoRA adapter, then compare baseline RAG and hybrid RAG plus LoRA. |
+| [**Held-Out Cases**](data/evaluation/cases.json) | Benchmark both systems on the same questions and write a decision report. |
 
 ```mermaid
 flowchart LR
@@ -41,69 +49,102 @@ flowchart LR
     H --> I["Decision report"]
 ```
 
-## Project Materials
+### Additional Folders and Files
 
-- [project-description.md](project-description.md): scenario, requirements,
-  milestones, deliverables, and acceptance checklist.
-- [data/knowledge_base/](data/knowledge_base/): approved policy sources for
-  retrieval.
-- [data/training/instruction_examples.jsonl](data/training/instruction_examples.jsonl):
-  supervised examples for the adapter.
-- [data/evaluation/cases.json](data/evaluation/cases.json): held-out benchmark
-  cases used for retrieval and answer evaluation.
-- [solution/README.md](solution/README.md): runnable reference implementation.
+| File / Folder | Description |
+|---|---|
+| [**data**](data/) | Approved policy sources, instruction examples, and held-out benchmark cases. |
+| [**solution**](solution/README.md) | Runnable reference implementation and tests; inspect after attempting the project. |
+| [**.env.example**](.env.example) | Local model and retrieval configuration template. |
+| [**pyproject.toml**](pyproject.toml) | Project configuration and dependencies. |
+| [**uv.lock**](uv.lock) | Dependency lock file. |
 
-## Environment
+## Setup
 
-The supplied solution uses
-[Hugging Face Transformers](https://huggingface.co/docs/transformers/index),
-[PEFT](https://huggingface.co/docs/peft/index), and
-[PyTorch](https://pytorch.org/docs/stable/index.html) for local LoRA training.
-It uses
-[Sentence Transformers](https://www.sbert.net/) for embeddings and
-[Qdrant local mode](https://qdrant.tech/documentation/quickstart/) as the
-vector database. The default
-[SmolLM2 135M Instruct model](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)
-is small enough for the reference workflow while still providing an
-instruction-oriented chat template.
+> [!NOTE]
+> Throughout these steps, text in angle brackets like `<repo-name>` is a **placeholder**. Replace it, including the `< >` brackets, with your own value. For example, `cd <repo-name>` becomes `cd mle-finetuning-rag-project`.
 
-### macOS
+### 1. Create the Repository from the Template
+
+Click **Use this template** on GitHub.
+
+When creating the repository:
+
+- Set yourself as the **Owner**
+- Choose a repository name
+- Disable **Include all branches**
+- Click **Create repository**
+
+> [!IMPORTANT]
+> If you are working in pairs or groups, only **one person** should complete this step.
+
+---
+
+### 2. Add Collaborators (Pairs/Groups Only)
+
+If working with teammates:
+
+1. Open the repository on GitHub
+2. Go to **Settings → Collaborators**
+3. Add your teammates as collaborators
+4. Share the repository link with your team
+
+Teammates should accept the invitation before continuing.
+
+---
+
+### 3. Clone the Repository
+
+Copy the SSH URL from the **Code** button on GitHub, then run:
 
 ```bash
-pyenv local 3.11.3
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+git clone <copied-ssh-url>
+```
+
+The copied SSH URL will look like `git@github.com:<your-username>/<repo-name>.git`.
+
+---
+
+### 4. Move into the Project Folder and Install Dependencies
+
+The command below installs all dependencies and creates a virtual environment in `.venv/`.
+
+```bash
+cd <repo-name>
+uv sync
+```
+
+The first training and evaluation runs download the configured public models from the [Hugging Face Hub](https://huggingface.co/docs/hub/index). The reference solution uses local Sentence Transformers embeddings, Qdrant local mode, and SmolLM2 with PEFT. The default base and embedding model revisions are pinned. Set `BASE_MODEL_REVISION` or `EMBEDDING_REVISION` explicitly when changing models. No hosted service or API key is required. Keep generated adapters, vector storage, and evaluation traces out of Git.
+
+---
+
+### 5. Set Up Environment Variables
+
+Copy the default local model and retrieval settings:
+
+```bash
 cp .env.example .env
 ```
 
-### Windows PowerShell
+The reference solution runs locally without a hosted API key. Keep the default settings for your first run; `.env` lets you change them later.
 
-```powershell
-pyenv local 3.11.3
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
+> [!CAUTION]
+> Never commit `.env`. It is git-ignored because environment files often hold secrets. Only `.env.example`, with placeholder or default values, belongs in the repository.
 
-### Windows Git Bash
+---
+
+### 6. Open the Repository in VS Code
+
+> [!NOTE]
+> Make sure you open VS Code from the project root so it automatically detects the environment created by `uv sync`.
+
+Launch VS Code in the project root folder:
 
 ```bash
-pyenv local 3.11.3
-python -m venv .venv
-source .venv/Scripts/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
+code .
 ```
 
-The first training and evaluation runs download the configured public models
-from the [Hugging Face Hub](https://huggingface.co/docs/hub/index). Generated
-adapter weights, model caches, vector storage, and machine-readable evaluation
-traces must remain outside version control.
+Select the Python interpreter in `.venv/` created by `uv sync`. Run the [reference solution commands](solution/README.md#run-the-reference-workflow) from the project root.
 
 ## Required Deliverables
 
@@ -120,18 +161,6 @@ Your repository must include:
 - tests covering data contracts, retrieval metadata, unsupported questions,
   citations, and report generation; and
 - a concise README explaining architecture, commands, and conclusions.
-
-## Learning Objectives
-
-By completing this project, you should be able to:
-
-- Build a hybrid RAG plus fine-tuned system using a real local LoRA adapter.
-- Benchmark the hybrid system against a baseline RAG pipeline on the same
-  held-out cases.
-- Separate retrieval quality from answer relevance, faithfulness, response
-  style, and abstention behavior.
-- Decide whether adaptation adds enough value to justify its training,
-  deployment, and maintenance cost.
 
 ## Useful References
 

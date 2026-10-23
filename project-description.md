@@ -155,7 +155,8 @@ your-hybrid-project/
 |-- tests/
 |-- .env.example
 |-- README.md
-`-- requirements.txt
+|-- pyproject.toml
+`-- uv.lock
 ```
 
 ## Suggested Milestones

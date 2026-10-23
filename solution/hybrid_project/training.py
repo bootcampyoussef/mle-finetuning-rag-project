@@ -1,9 +1,10 @@
 """Real laptop-friendly LoRA training for the project reference solution."""
 
+import hashlib
 import json
 
-from peft import LoraConfig, TaskType, get_peft_model
 import torch
+from peft import LoraConfig, TaskType, get_peft_model
 from torch.optim import AdamW
 from transformers import (
     AutoModelForCausalLM,
@@ -97,14 +98,20 @@ def train_adapter(settings: Settings) -> TrainingSummary:
     """Train LoRA weights and save a reproducible training summary."""
 
     set_seed(settings.random_seed)
-    examples = load_training_examples(settings.training_file)
-    tokenizer = AutoTokenizer.from_pretrained(settings.base_model)
+    # Fingerprint the same bytes used for training, even if the file is edited later.
+    training_bytes = settings.training_file.read_bytes()
+    examples = load_training_examples(settings.training_file, content=training_bytes)
+    tokenizer = AutoTokenizer.from_pretrained(
+        settings.base_model, revision=settings.base_model_revision
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    base_model = AutoModelForCausalLM.from_pretrained(settings.base_model)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        settings.base_model, revision=settings.base_model_revision
+    )
     # Some tiny checkpoint configs omit this value even though the model is causal.
-    setattr(base_model, "loss_type", "ForCausalLM")
+    base_model.loss_type = "ForCausalLM"
     base_model.config.use_cache = False
     target_modules, fan_in_fan_out = _lora_targets(base_model)
     lora_config = LoraConfig(
@@ -148,11 +155,14 @@ def train_adapter(settings: Settings) -> TrainingSummary:
         epoch_losses.append(running_loss / len(examples))
 
     settings.adapter_path.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(settings.adapter_path))
+    # Only attention projections were trained; vocabulary and embeddings are unchanged.
+    model.save_pretrained(str(settings.adapter_path), save_embedding_layers=False)
     tokenizer.save_pretrained(str(settings.adapter_path))
     trainable, total = _parameter_counts(model)
     summary = TrainingSummary(
         base_model=settings.base_model,
+        base_model_revision=settings.base_model_revision,
+        training_sha256=hashlib.sha256(training_bytes).hexdigest(),
         adapter_path=settings.adapter_path,
         epochs=settings.train_epochs,
         learning_rate=settings.learning_rate,

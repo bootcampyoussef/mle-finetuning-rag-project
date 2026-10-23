@@ -18,7 +18,6 @@ from .models import (
 from .pipeline import ComparisonPipeline
 from .retrieval import Retriever
 
-
 SYSTEMS: tuple[SystemName, ...] = ("base-only", "rag-base", "rag-lora")
 
 
@@ -74,10 +73,12 @@ def _term_coverage(answer: str, required_terms: list[str]) -> float:
 
 
 def _style_compliance(answer: str, status: str) -> float:
-    """Score concise, direct language without vague hedging."""
+    """Score accepted responses, never the template replacing a rejected answer."""
 
     if status == "abstained":
         return 1.0
+    if status != "answered":
+        return 0.0
     words = answer.split()
     first_sentence = answer.split(".", maxsplit=1)[0].split()
     checks = (
@@ -124,8 +125,8 @@ def evaluate_system(
             else result.status == "answered"
         )
         relevance = (
-            1.0
-            if case.should_abstain and result.status == "abstained"
+            float(result.status == "abstained")
+            if case.should_abstain
             else _term_coverage(result.answer, case.required_terms)
         )
         rows.append(
@@ -208,6 +209,7 @@ def render_report(
             training_summary_path.read_text(encoding="utf-8")
         )
         if training_summary_path.exists()
+        and settings.embedding_model != "hash-smoke-test-only"
         else None
     )
     try:
@@ -221,8 +223,10 @@ def render_report(
         "## Configuration",
         "",
         f"- Base model: `{settings.base_model}`",
+        f"- Base revision: `{settings.base_model_revision or 'not pinned'}`",
         f"- Adapter path: `{adapter_display}`",
         f"- Embedding model: `{settings.embedding_model}`",
+        f"- Embedding revision: `{settings.embedding_revision or 'not pinned'}`",
         "- Vector database: `Qdrant` local mode with cosine similarity",
         f"- Retrieval: `top_k={settings.top_k}`, `min_score={settings.min_score:.2f}`",
         f"- Baseline generator: `{pipeline.base_generator.mode}`",
@@ -231,18 +235,27 @@ def render_report(
     if training_summary is not None:
         lines.extend(
             [
+                f"- Training data SHA-256: `{training_summary.training_sha256}`",
                 f"- LoRA targets: `{', '.join(training_summary.lora_target_modules)}`",
-                f"- LoRA rank / alpha / dropout: `{training_summary.lora_rank}` / "
-                f"`{training_summary.lora_alpha}` / "
-                f"`{training_summary.lora_dropout:.2f}`",
-                f"- Training: `{training_summary.epochs}` epochs, learning rate "
-                f"`{training_summary.learning_rate}`, seed "
-                f"`{training_summary.random_seed}`",
-                f"- Trainable parameters: `{training_summary.trainable_parameters}` "
-                f"of `{training_summary.total_parameters}` "
-                f"(`{training_summary.trainable_percentage:.3f}%`)",
-                f"- Training loss: `{training_summary.epoch_losses[0]:.3f}` to "
-                f"`{training_summary.epoch_losses[-1]:.3f}`",
+                (
+                    f"- LoRA rank / alpha / dropout: `{training_summary.lora_rank}` / "
+                    f"`{training_summary.lora_alpha}` / "
+                    f"`{training_summary.lora_dropout:.2f}`"
+                ),
+                (
+                    f"- Training: `{training_summary.epochs}` epochs, learning rate "
+                    f"`{training_summary.learning_rate}`, seed "
+                    f"`{training_summary.random_seed}`"
+                ),
+                (
+                    f"- Trainable parameters: `{training_summary.trainable_parameters}` "
+                    f"of `{training_summary.total_parameters}` "
+                    f"(`{training_summary.trainable_percentage:.3f}%`)"
+                ),
+                (
+                    f"- Training loss: `{training_summary.epoch_losses[0]:.3f}` to "
+                    f"`{training_summary.epoch_losses[-1]:.3f}`"
+                ),
             ]
         )
     lines.extend(
@@ -252,9 +265,9 @@ def render_report(
             "",
             "- `recall@k`: supported cases whose expected source appears in the shared retrieval results.",
             "- `MRR`: reciprocal rank of the first expected source for supported cases.",
-            "- `answer relevance`: proportion of labeled required terms present in the answer.",
+            "- `answer relevance`: proportion of labeled required terms present in the answer; unsupported cases score 1 only when the system abstains.",
             "- `faithfulness`: valid expected citations with no labeled forbidden claim; unsupported cases must abstain.",
-            "- `style compliance`: concise first sentence, concise total response, and no vague hedge.",
+            "- `style compliance`: concise first sentence, concise total response, and no vague hedge; rejected answers score 0, retrieval abstentions score 1.",
             "- `decision accuracy`: answer supported cases and abstain on unsupported cases.",
             "",
             "## Shared Retrieval Results",
@@ -322,14 +335,18 @@ def render_report(
         )
     lines.extend(
         [
-            f"- Shared retrieval recall is "
-            f"`{summary.retrieval_recall_at_k:.3f}`; failures after successful "
-            "retrieval are generation, citation, or answer-coverage failures.",
-            f"- The adapter changes faithfulness by "
-            f"`{faithfulness_delta:+.3f}` and decision accuracy from "
-            f"`{rag_base.decision_accuracy:.3f}` to "
-            f"`{rag_lora.decision_accuracy:.3f}`. Remaining invalid citations "
-            "still require rejection rather than automatic repair.",
+            (
+                f"- Shared retrieval recall is "
+                f"`{summary.retrieval_recall_at_k:.3f}`; failures after successful "
+                "retrieval are generation, citation, or answer-coverage failures."
+            ),
+            (
+                f"- The adapter changes faithfulness by "
+                f"`{faithfulness_delta:+.3f}` and decision accuracy from "
+                f"`{rag_base.decision_accuracy:.3f}` to "
+                f"`{rag_lora.decision_accuracy:.3f}`. Remaining invalid citations "
+                "still require rejection rather than automatic repair."
+            ),
         ]
     )
     lines.extend(
@@ -337,11 +354,13 @@ def render_report(
             "",
             "## Threshold Decision",
             "",
-            f"The shared threshold is `{settings.min_score:.2f}`. The weakest "
-            f"supported top score is `{weakest_supported:.3f}` and the strongest "
-            f"unsupported top score is `{strongest_unsupported:.3f}`. The same "
-            "threshold is applied to baseline RAG and hybrid RAG so adapter "
-            "quality cannot hide retrieval uncertainty.",
+            (
+                f"The shared threshold is `{settings.min_score:.2f}`. The weakest "
+                f"supported top score is `{weakest_supported:.3f}` and the strongest "
+                f"unsupported top score is `{strongest_unsupported:.3f}`. The same "
+                "threshold is applied to baseline RAG and hybrid RAG so adapter "
+                "quality cannot hide retrieval uncertainty."
+            ),
             "",
             "## Recommendation",
             "",

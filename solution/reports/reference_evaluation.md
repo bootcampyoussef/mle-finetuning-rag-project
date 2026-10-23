@@ -3,12 +3,15 @@
 ## Configuration
 
 - Base model: `HuggingFaceTB/SmolLM2-135M-Instruct`
+- Base revision: `12fd25f77366fa6b3b4b768ec3050bf629380bac`
 - Adapter path: `artifacts/support-lora-adapter`
 - Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+- Embedding revision: `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`
 - Vector database: `Qdrant` local mode with cosine similarity
 - Retrieval: `top_k=3`, `min_score=0.30`
 - Baseline generator: `HuggingFaceTB/SmolLM2-135M-Instruct with unchanged base model`
 - Hybrid generator: `HuggingFaceTB/SmolLM2-135M-Instruct with LoRA adapter`
+- Training data SHA-256: `ea802c67fd40dcef12fd1c4af38fdcfb6d3dd1eeee204ac83fee9af79a736996`
 - LoRA targets: `q_proj, v_proj`
 - LoRA rank / alpha / dropout: `8` / `16` / `0.05`
 - Training: `8` epochs, learning rate `0.0002`, seed `42`
@@ -19,9 +22,9 @@
 
 - `recall@k`: supported cases whose expected source appears in the shared retrieval results.
 - `MRR`: reciprocal rank of the first expected source for supported cases.
-- `answer relevance`: proportion of labeled required terms present in the answer.
+- `answer relevance`: proportion of labeled required terms present in the answer; unsupported cases score 1 only when the system abstains.
 - `faithfulness`: valid expected citations with no labeled forbidden claim; unsupported cases must abstain.
-- `style compliance`: concise first sentence, concise total response, and no vague hedge.
+- `style compliance`: concise first sentence, concise total response, and no vague hedge; rejected answers score 0, retrieval abstentions score 1.
 - `decision accuracy`: answer supported cases and abstain on unsupported cases.
 
 ## Shared Retrieval Results
@@ -35,15 +38,15 @@
 
 | System | Relevance | Faithfulness | Style | Decision accuracy | Mean latency (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| base-only | 0.208 | 0.000 | 0.972 | 0.833 | 0.530 |
-| rag-base | 0.167 | 0.167 | 1.000 | 0.167 | 0.574 |
-| rag-lora | 0.667 | 0.750 | 1.000 | 0.833 | 0.511 |
+| base-only | 0.042 | 0.000 | 0.972 | 0.833 | 0.585 |
+| rag-base | 0.167 | 0.167 | 0.167 | 0.167 | 0.626 |
+| rag-lora | 0.667 | 0.750 | 0.833 | 0.833 | 0.551 |
 
 ## Hybrid Delta Against Baseline RAG
 
 - Answer relevance delta: `+0.500`
 - Faithfulness delta: `+0.583`
-- Style-compliance delta: `+0.000`
+- Style-compliance delta: `+0.667`
 
 ## Per-Case Comparison
 
@@ -59,25 +62,25 @@
 | eval-pause | base-only | answered | 0.00 | no | 1.00 | - |
 | eval-outage-updates | base-only | answered | 0.00 | no | 1.00 | - |
 | eval-log-secrets | base-only | answered | 0.00 | no | 0.67 | - |
-| eval-cafeteria | base-only | answered | 1.00 | no | 1.00 | - |
-| eval-bicycle | base-only | answered | 1.00 | no | 1.00 | - |
-| eval-refund-ticket | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-duplicate-payment | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-authenticator | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-passport | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-packed-address | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-standard-shipping | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-annual-refund | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-pause | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-outage-updates | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-log-secrets | rag-base | invalid-citations | 0.00 | no | 1.00 | - |
+| eval-cafeteria | base-only | answered | 0.00 | no | 1.00 | - |
+| eval-bicycle | base-only | answered | 0.00 | no | 1.00 | - |
+| eval-refund-ticket | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-duplicate-payment | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-authenticator | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-passport | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-packed-address | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-standard-shipping | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-annual-refund | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-pause | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-outage-updates | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-log-secrets | rag-base | invalid-citations | 0.00 | no | 0.00 | - |
 | eval-cafeteria | rag-base | abstained | 1.00 | yes | 1.00 | - |
 | eval-bicycle | rag-base | abstained | 1.00 | yes | 1.00 | - |
 | eval-refund-ticket | rag-lora | answered | 0.50 | yes | 1.00 | refunds |
 | eval-duplicate-payment | rag-lora | answered | 1.00 | yes | 1.00 | refunds |
 | eval-authenticator | rag-lora | answered | 0.50 | yes | 1.00 | account-security |
-| eval-passport | rag-lora | invalid-citations | 0.00 | no | 1.00 | - |
-| eval-packed-address | rag-lora | invalid-citations | 0.00 | no | 1.00 | - |
+| eval-passport | rag-lora | invalid-citations | 0.00 | no | 0.00 | - |
+| eval-packed-address | rag-lora | invalid-citations | 0.00 | no | 0.00 | - |
 | eval-standard-shipping | rag-lora | answered | 1.00 | yes | 1.00 | shipping |
 | eval-annual-refund | rag-lora | answered | 1.00 | no | 1.00 | refunds |
 | eval-pause | rag-lora | answered | 0.00 | yes | 1.00 | subscriptions |

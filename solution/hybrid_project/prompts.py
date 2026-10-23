@@ -6,7 +6,6 @@ from transformers import PreTrainedTokenizerBase
 
 from .models import SearchHit, TrainingExample
 
-
 ANSWER_MARKER = "### Support answer\n"
 SYSTEM_INSTRUCTION = (
     "Answer only from approved context. Start with the direct answer, then "

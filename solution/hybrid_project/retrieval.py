@@ -17,7 +17,7 @@ class Retriever:
     ) -> None:
         self.settings = settings
         self.embedder = embedder or SentenceTransformerEmbedder(
-            settings.embedding_model
+            settings.embedding_model, revision=settings.embedding_revision
         )
         self.chunks: list[Chunk] = chunk_documents(
             load_documents(settings.knowledge_base_dir)

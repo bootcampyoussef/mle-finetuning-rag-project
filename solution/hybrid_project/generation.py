@@ -1,11 +1,12 @@
 """Base and adapter-backed local answer generation."""
 
-from collections.abc import Sequence
+import hashlib
 import re
+from collections.abc import Sequence
 from typing import Protocol
 
-from peft import PeftModel
 import torch
+from peft import PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -14,9 +15,8 @@ from transformers import (
 )
 
 from .config import Settings
-from .models import SearchHit
+from .models import SearchHit, TrainingSummary
 from .prompts import evidence_text, inference_prompt
-
 
 CITATION_PATTERN = re.compile(r"\[([a-z0-9-]+)\]")
 FALLBACK_ANSWER = "The approved material is insufficient. Escalate for manual review."
@@ -36,6 +36,34 @@ def citations_are_valid(answer: str, hits: Sequence[SearchHit]) -> bool:
     return bool(citations) and set(citations).issubset(retrieved)
 
 
+def validate_adapter(settings: Settings) -> None:
+    """Reject stale or untraceable adapters before loading any model weights."""
+
+    summary_path = settings.adapter_path / "training_summary.json"
+    if not summary_path.exists():
+        raise FileNotFoundError(
+            "Adapter provenance is missing; run the training command."
+        )
+    try:
+        summary = TrainingSummary.model_validate_json(summary_path.read_bytes())
+    except ValueError as error:
+        raise ValueError(
+            "Adapter provenance is invalid; rerun the training command."
+        ) from error
+    if (summary.base_model, summary.base_model_revision) != (
+        settings.base_model,
+        settings.base_model_revision,
+    ):
+        raise ValueError(
+            "The base model or revision changed; rerun the training command."
+        )
+    if (
+        summary.training_sha256
+        != hashlib.sha256(settings.training_file.read_bytes()).hexdigest()
+    ):
+        raise ValueError("Training data changed; rerun the training command.")
+
+
 class Generator(Protocol):
     """Generation contract used by every benchmark path."""
 
@@ -53,19 +81,18 @@ class LocalModelGenerator:
     def __init__(self, settings: Settings, use_adapter: bool) -> None:
         self.settings = settings
         self.use_adapter = use_adapter
+        if use_adapter:
+            validate_adapter(settings)
         tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
-            settings.base_model
+            settings.base_model, revision=settings.base_model_revision
         )
         self.tokenizer = tokenizer
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        base_model = AutoModelForCausalLM.from_pretrained(settings.base_model)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            settings.base_model, revision=settings.base_model_revision
+        )
         if use_adapter:
-            if not settings.adapter_path.exists():
-                raise FileNotFoundError(
-                    f"Adapter not found at {settings.adapter_path}. "
-                    "Run the training command first."
-                )
             adapter_model = PeftModel.from_pretrained(
                 base_model, str(settings.adapter_path)
             )

@@ -1,7 +1,7 @@
 """Command-line workflow for data inspection, training, querying, and evaluation."""
 
-from dataclasses import replace
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 

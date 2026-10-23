@@ -7,12 +7,14 @@ from .documents import load_documents
 from .models import DataSummary, EvaluationCase, TrainingExample
 
 
-def load_training_examples(path: Path) -> list[TrainingExample]:
+def load_training_examples(
+    path: Path, *, content: bytes | None = None
+) -> list[TrainingExample]:
     """Parse JSON Lines examples with line-specific validation errors."""
 
     examples: list[TrainingExample] = []
     for line_number, line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), start=1
+        (path.read_bytes() if content is None else content).splitlines(), start=1
     ):
         if not line.strip():
             continue
