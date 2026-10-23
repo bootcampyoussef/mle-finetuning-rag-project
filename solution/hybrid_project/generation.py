@@ -3,16 +3,18 @@
 import hashlib
 import re
 from collections.abc import Sequence
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import torch
 from peft import PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    PreTrainedModel,
     PreTrainedTokenizerBase,
 )
+
+if TYPE_CHECKING:
+    from transformers._typing import GenerativePreTrainedModel
 
 from .config import Settings
 from .models import SearchHit, TrainingSummary
@@ -83,9 +85,11 @@ class LocalModelGenerator:
         self.use_adapter = use_adapter
         if use_adapter:
             validate_adapter(settings)
-        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(
             settings.base_model, revision=settings.base_model_revision
         )
+        if not isinstance(tokenizer, PreTrainedTokenizerBase):
+            raise TypeError("The configured model did not return a tokenizer")
         self.tokenizer = tokenizer
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -96,9 +100,10 @@ class LocalModelGenerator:
             adapter_model = PeftModel.from_pretrained(
                 base_model, str(settings.adapter_path)
             )
-            model: PreTrainedModel | PeftModel = adapter_model
+            model: GenerativePreTrainedModel | PeftModel = adapter_model
         else:
-            model = base_model
+            # AutoModelForCausalLM supplies the generative model contract.
+            model = cast("GenerativePreTrainedModel", base_model)
         self.model = model
         # Models load on CPU by default; derive the actual placement so inputs match.
         self.device = next(self.model.parameters()).device
@@ -137,8 +142,10 @@ class LocalModelGenerator:
                 eos_token_id=self.tokenizer.eos_token_id,
             )
         new_tokens = generated[0, input_ids.shape[1] :]
-        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        return answer or FALLBACK_ANSWER
+        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        if not isinstance(answer, str):
+            raise TypeError("Decoding one answer must return a string")
+        return answer.strip() or FALLBACK_ANSWER
 
 
 class ExtractiveSmokeGenerator:

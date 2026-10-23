@@ -104,6 +104,8 @@ def train_adapter(settings: Settings) -> TrainingSummary:
     tokenizer = AutoTokenizer.from_pretrained(
         settings.base_model, revision=settings.base_model_revision
     )
+    if not isinstance(tokenizer, PreTrainedTokenizerBase):
+        raise TypeError("The configured model did not return a tokenizer")
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 

@@ -5,10 +5,9 @@ import re
 from typing import Protocol
 
 import numpy as np
-from numpy.typing import NDArray
 from sentence_transformers import SentenceTransformer
 
-VectorMatrix = NDArray[np.float32]
+VectorMatrix = np.ndarray[tuple[int, int], np.dtype[np.float32]]
 
 
 class Embedder(Protocol):
