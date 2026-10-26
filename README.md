@@ -61,6 +61,9 @@ flowchart LR
 
 ## Setup
 
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.13.5 or newer
+and Python 3.13.17 or newer. Python 3.13.18 is recommended when available.
+
 > [!NOTE]
 > Throughout these steps, text in angle brackets like `<repo-name>` is a **placeholder**. Replace it, including the `< >` brackets, with your own value. For example, `cd <repo-name>` becomes `cd mle-finetuning-rag-project`.
 

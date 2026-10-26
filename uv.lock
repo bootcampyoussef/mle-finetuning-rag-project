@@ -1,9 +1,15 @@
 version = 1
 revision = 5
-requires-python = ">=3.13"
+requires-python = ">=3.13.17"
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version < '3.14'",
+]
+
+[manifest]
+constraints = [
+    { name = "certifi", specifier = ">=2026.10.19" },
+    { name = "pip", specifier = ">=26.2.2" },
 ]
 
 [[package]]
