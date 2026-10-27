@@ -17,7 +17,7 @@ measured comparison against a baseline RAG system.
 
 By the end of this repository, you should be able to:
 
-- Build a hybrid RAG plus fine-tuned system using a real local LoRA adapter.
+- Build a hybrid RAG + LoRA system with a real, locally trained adapter.
 - Benchmark the hybrid system against a baseline RAG pipeline on the same
   held-out cases.
 - Separate retrieval quality from answer relevance, faithfulness, response
@@ -154,7 +154,7 @@ Your repository must include:
 
 - reproducible policy ingestion, chunking, embedding, indexing, and retrieval,
 - a real local LoRA training command and saved adapter configuration,
-- baseline RAG and hybrid RAG plus LoRA answer paths using the same retriever,
+- baseline RAG and hybrid RAG + LoRA answer paths using the same retriever,
 - citation validation and abstention when evidence is unsupported,
 - evaluation code that reports retrieval quality separately from answer
   relevance, faithfulness, style compliance, and decision accuracy,

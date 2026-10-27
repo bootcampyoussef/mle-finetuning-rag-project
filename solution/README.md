@@ -138,4 +138,4 @@ ID.
 ### Why include base-only results?
 
 Base-only results expose whether retrieval itself adds value. The required
-project decision remains baseline RAG versus hybrid RAG plus LoRA.
+project decision remains baseline RAG versus hybrid RAG + LoRA.
