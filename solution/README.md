@@ -5,18 +5,18 @@ RAG project. The solution keeps data validation, retrieval, adapter
 training, generation, and evaluation as separate responsibilities so each
 decision can be inspected or replaced.
 
-The real project path uses:
+The reference project path uses:
 
-- [Sentence Transformers](https://www.sbert.net/) for dense policy embeddings;
+- [Sentence Transformers](https://www.sbert.net/) for dense policy embeddings,
 - [Qdrant local mode](https://qdrant.tech/documentation/quickstart/) for vector
-  storage with source metadata;
+  storage with source metadata,
 - [Hugging Face Transformers](https://huggingface.co/docs/transformers/index)
   and [PyTorch](https://pytorch.org/docs/stable/index.html) for the local causal
   language model, using
   [SmolLM2 135M Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)
-  by default;
+  by default,
 - [Hugging Face PEFT](https://huggingface.co/docs/peft/index) for a real LoRA
-  optimization run; and
+  optimization run,
 - deterministic metric rubrics that keep retrieval, relevance, faithfulness,
   response style, decisions, and latency separate.
 
@@ -117,25 +117,25 @@ from the real dense retriever and real base/adapter model paths.
 
 ## Implementation Decisions
 
-### Why Share The Retriever?
+### Why share the retriever?
 
 Using one retriever, evidence threshold, prompt structure, and benchmark keeps
 the comparison focused on the adapter. Different retrieval results would
 confound the fine-tuning decision.
 
-### Why Mask Prompt Tokens During Training?
+### Why mask prompt tokens during training?
 
 The adapter loss is calculated on the target answer rather than rewarding the
 model for reproducing context and question text. This keeps the small training
 signal focused on response behavior.
 
-### Why Validate Citations After Generation?
+### Why validate citations after generation?
 
 Prompt instructions do not guarantee compliant output. A generated answer is
 accepted only when it cites at least one retrieved source and invents no source
 ID.
 
-### Why Include Base-Only Results?
+### Why include base-only results?
 
 Base-only results expose whether retrieval itself adds value. The required
 project decision remains baseline RAG versus hybrid RAG plus LoRA.

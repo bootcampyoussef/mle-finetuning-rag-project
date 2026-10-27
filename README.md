@@ -1,22 +1,21 @@
 # Fine-Tuning + RAG Project
 
-Please **use this repository as a template** for your hybrid language-model
+Use this repository as a **template** for your hybrid language-model
 project. Build an assistant for the fictional Northstar customer-support team
-that retrieves current policy evidence and uses a locally trained
-[LoRA](https://arxiv.org/abs/2106.09685) adapter to produce concise,
-evidence-aware replies.
+that retrieves current policy evidence and uses a locally trained LoRA adapter to produce concise,
+evidence-aware replies. Create pull requests in your own copy even if you are
+working alone, and use them to track your progress.
 
 This assignment combines the earlier work on
-[retrieval-augmented generation (RAG)](https://arxiv.org/abs/2005.11401),
-[vector search](https://qdrant.tech/documentation/concepts/search/), and
-[parameter-efficient fine-tuning](https://huggingface.co/docs/peft/index).
+retrieval-augmented generation (RAG),
+vector search, and parameter-efficient fine-tuning.
 It follows the earlier strategy lesson by turning the selected hybrid pattern
 into an assessed implementation with a real local fine-tuning run and a
 measured comparison against a baseline RAG system.
 
 ## Learning Objectives
 
-By completing this project, you should be able to:
+By the end of this repository, you should be able to:
 
 - Build a hybrid RAG plus fine-tuned system using a real local LoRA adapter.
 - Benchmark the hybrid system against a baseline RAG pipeline on the same
@@ -27,13 +26,6 @@ By completing this project, you should be able to:
   deployment, and maintenance cost.
 
 ## Learning Path
-
-| File / Folder | Description |
-|---|---|
-| [**Project Brief**](project-description.md) | Scenario, milestones, deliverables, and acceptance checklist. |
-| [**Policy Sources**](data/knowledge_base/) | Build a retriever that preserves source IDs and applies an evidence threshold. |
-| [**Training Examples**](data/training/instruction_examples.jsonl) | Train a local LoRA adapter, then compare baseline RAG and hybrid RAG plus LoRA. |
-| [**Held-Out Cases**](data/evaluation/cases.json) | Benchmark both systems on the same questions and write a decision report. |
 
 ```mermaid
 flowchart LR
@@ -49,12 +41,18 @@ flowchart LR
     H --> I["Decision report"]
 ```
 
+| File / Folder | Description |
+|---|---|
+| [**Project Description**](project-description.md) | Scenario, milestones, deliverables, and acceptance checklist. |
+
 ### Additional Folders and Files
 
 | File / Folder | Description |
 |---|---|
-| [**data**](data/) | Approved policy sources, instruction examples, and held-out benchmark cases. |
-| [**solution**](solution/README.md) | Runnable reference implementation and tests; inspect after attempting the project. |
+| [**data/knowledge_base**](data/knowledge_base/) | Approved support policies the assistant may cite. |
+| [**data/training**](data/training/) | Example support replies for training the LoRA adapter. |
+| [**data/evaluation**](data/evaluation/) | Labeled questions for benchmarking both systems. |
+| [**solution**](solution/README.md) | Runnable reference implementation and tests. Inspect after attempting the project. |
 | [**.env.example**](.env.example) | Local model and retrieval configuration template. |
 | [**pyproject.toml**](pyproject.toml) | Project configuration and dependencies. |
 | [**uv.lock**](uv.lock) | Dependency lock file. |
@@ -154,27 +152,22 @@ Select the Python interpreter in `.venv/` created by `uv sync`. Run the [referen
 
 Your repository must include:
 
-- reproducible policy ingestion, chunking, embedding, indexing, and retrieval;
-- a real local LoRA training command and saved adapter configuration;
-- baseline RAG and hybrid RAG plus LoRA answer paths using the same retriever;
-- citation validation and abstention when evidence is unsupported;
+- reproducible policy ingestion, chunking, embedding, indexing, and retrieval,
+- a real local LoRA training command and saved adapter configuration,
+- baseline RAG and hybrid RAG plus LoRA answer paths using the same retriever,
+- citation validation and abstention when evidence is unsupported,
 - evaluation code that reports retrieval quality separately from answer
-  relevance, faithfulness, style compliance, and decision accuracy;
+  relevance, faithfulness, style compliance, and decision accuracy,
 - `reports/evaluation_report.md` with a per-case comparison, failure analysis,
-  threshold decision, and prioritized next experiments;
+  threshold decision, and prioritized next experiments,
 - tests covering data contracts, retrieval metadata, unsupported questions,
-  citations, and report generation; and
+  citations, and report generation,
 - a concise README explaining architecture, commands, and conclusions.
 
-## Useful References
+## References & Further Reading
 
-- Lewis et al.,
-  [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401).
-- Hu et al.,
-  [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685).
-- [Hugging Face PEFT LoRA guide](https://huggingface.co/docs/peft/developer_guides/lora).
-- [Hugging Face causal language-model training](https://huggingface.co/docs/transformers/tasks/language_modeling).
-- [Sentence Transformers semantic search](https://www.sbert.net/examples/sentence_transformer/applications/semantic-search/README.html).
-- [Qdrant local quickstart](https://qdrant.tech/documentation/quickstart/).
-- [Ragas metrics](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/)
-  for extending answer evaluation.
+- [Hugging Face Causal Language Modeling](https://huggingface.co/docs/transformers/tasks/language_modeling)
+- [Sentence Transformers Semantic Search](https://www.sbert.net/examples/sentence_transformer/applications/semantic-search/README.html)
+- [Hugging Face PEFT LoRA guide](https://huggingface.co/docs/peft/developer_guides/lora)
+- [Qdrant Local Quickstart](https://qdrant.tech/documentation/quickstart/)
+- [Ragas Metrics](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/)
