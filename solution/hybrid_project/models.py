@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 SystemName = Literal["base-only", "rag-base", "rag-lora"]
 AnswerStatus = Literal["answered", "abstained", "invalid-citations"]
 
@@ -69,6 +68,8 @@ class TrainingSummary(BaseModel):
     """Reproducible record of one completed LoRA optimization run."""
 
     base_model: str
+    base_model_revision: str | None
+    training_sha256: str
     adapter_path: Path
     epochs: int
     learning_rate: float
@@ -82,6 +83,8 @@ class TrainingSummary(BaseModel):
     total_parameters: int
     trainable_percentage: float
     epoch_losses: list[float]
+    training_seconds: float | None = None
+    training_device: str | None = None
 
 
 class Answer(BaseModel):
@@ -91,6 +94,7 @@ class Answer(BaseModel):
     question: str
     answer: str
     status: AnswerStatus
+    raw_answer: str | None = None
     citations: list[str] = Field(default_factory=list)
     retrieved_sources: list[str] = Field(default_factory=list)
     top_score: float | None = None
@@ -115,6 +119,8 @@ class SystemEvaluationRow(BaseModel):
     status: AnswerStatus
     answer: str
     citations: list[str]
+    raw_answer: str | None = None
+    raw_relevance: float | None = None
     relevance: float
     faithful: bool
     style_compliance: float

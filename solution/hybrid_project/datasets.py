@@ -4,15 +4,18 @@ import json
 from pathlib import Path
 
 from .documents import load_documents
+from .generation import citations_in
 from .models import DataSummary, EvaluationCase, TrainingExample
 
 
-def load_training_examples(path: Path) -> list[TrainingExample]:
+def load_training_examples(
+    path: Path, *, content: bytes | None = None
+) -> list[TrainingExample]:
     """Parse JSON Lines examples with line-specific validation errors."""
 
     examples: list[TrainingExample] = []
     for line_number, line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), start=1
+        (path.read_bytes() if content is None else content).splitlines(), start=1
     ):
         if not line.strip():
             continue
@@ -68,6 +71,10 @@ def validate_data(settings_path: tuple[Path, Path, Path]) -> DataSummary:
         ):
             raise ValueError(
                 f"Training example {example.id} context must label every source ID"
+            )
+        if not set(citations_in(example.answer)).issubset(example.reference_ids):
+            raise ValueError(
+                f"Training example {example.id} answer cites a source absent from its context"
             )
 
     for case in cases:

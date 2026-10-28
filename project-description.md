@@ -1,6 +1,4 @@
-# Fine-Tuning + RAG Project Brief
-
-## Scenario
+# Project Description
 
 Northstar operates a subscription platform and a digital workshop marketplace.
 Its support team answers questions about refunds, account security, shipping,
@@ -10,7 +8,7 @@ action-oriented reply style the team expects.
 
 Build a hybrid assistant that combines both forms of knowledge:
 
-- retrieval supplies current, citable policy evidence; and
+- retrieval supplies current, citable policy evidence,
 - a locally trained LoRA adapter shapes how the model follows context and
   writes support replies.
 
@@ -18,13 +16,13 @@ The final benchmark must determine whether the hybrid system improves on a
 baseline RAG pipeline enough to justify the additional training and deployment
 complexity.
 
-## Main Goal
+## Main Task
 
 Implement and evaluate two comparable systems:
 
 1. **Baseline RAG:** retrieve policy evidence and prompt the unchanged base
    model.
-2. **Hybrid RAG plus LoRA:** use the same retriever and prompt structure, but
+2. **Hybrid RAG + LoRA:** use the same retriever and prompt structure, but
    generate with the locally trained adapter.
 
 You may also include a base-model-only result to expose the value of retrieval,
@@ -58,9 +56,9 @@ Every compared system must run on the same cases with the same metric rubric.
 
 Validate the three data layers before training:
 
-- every training example has an ID, context, question, answer, and source IDs;
-- every cited source ID exists in the knowledge base;
-- evaluation IDs are unique; and
+- every training example has an ID, context, question, answer, and source IDs,
+- every cited source ID exists in the knowledge base,
+- evaluation IDs are unique,
 - evaluation cases remain separate from training examples.
 
 Document any data-quality decision that changes the supplied examples.
@@ -70,9 +68,9 @@ Document any data-quality decision that changes the supplied examples.
 Load and chunk the Markdown sources, create embeddings, and store chunks in a
 real vector index or vector database. Retain at least:
 
-- document ID;
-- title;
-- chunk position; and
+- document ID,
+- title,
+- chunk position,
 - source text.
 
 Define a top-k setting and evidence threshold. Unsupported questions must
@@ -84,11 +82,11 @@ Train an adapter with
 [Hugging Face PEFT](https://huggingface.co/docs/peft/index) or an equivalent
 parameter-efficient fine-tuning library. Record:
 
-- base model name and revision when available;
-- prompt serialization format;
-- LoRA target modules, rank, alpha, and dropout;
-- sequence length, epochs, learning rate, and random seed;
-- trainable versus total parameter counts; and
+- base model name and revision when available,
+- prompt serialization format,
+- LoRA target modules, rank, alpha, and dropout,
+- sequence length, epochs, learning rate, and random seed,
+- trainable versus total parameter counts,
 - adapter output path.
 
 The project must run a real optimization loop. Few-shot prompting alone does
@@ -101,10 +99,10 @@ hybrid system. The only intended model difference should be the loaded adapter.
 
 Both paths must:
 
-- answer only from retrieved evidence;
-- cite source IDs in square brackets;
-- reject citations that were not retrieved;
-- apply the same no-answer threshold; and
+- answer only from retrieved evidence,
+- cite source IDs in square brackets,
+- reject citations that were not retrieved,
+- apply the same no-answer threshold,
 - expose whether the result was answered, abstained, or rejected.
 
 ### 5. Evaluation
@@ -112,11 +110,11 @@ Both paths must:
 Evaluate retrieval once and answer quality separately for each system.
 At minimum, report:
 
-- retrieval recall@k and mean reciprocal rank;
-- required-term coverage as a transparent relevance proxy;
-- citation-based faithfulness;
-- response-style compliance;
-- supported-versus-unsupported decision accuracy; and
+- retrieval recall@k and mean reciprocal rank,
+- required-term coverage as a transparent relevance proxy,
+- citation-based faithfulness,
+- response-style compliance,
+- supported-versus-unsupported decision accuracy,
 - latency per answer.
 
 Keep deterministic rubrics explicit. If you add an LLM-based judge, report it
@@ -126,12 +124,12 @@ as a separate metric and retain a no-key evaluation path.
 
 Submit `reports/evaluation_report.md` containing:
 
-- complete configuration for retrieval, base model, and adapter;
-- aggregate comparison table;
-- per-case evidence for both systems;
-- at least two failure or fragile-success analyses;
-- the evidence behind the retrieval threshold;
-- training and inference cost considerations; and
+- complete configuration for retrieval, base model, and adapter,
+- aggregate comparison table,
+- per-case evidence for both systems,
+- at least two failure or fragile-success analyses,
+- the evidence behind the retrieval threshold,
+- training and inference cost considerations,
 - a recommendation to keep, revise, or reject the hybrid design.
 
 Do not conclude that fine-tuning is useful merely because training loss
@@ -141,21 +139,22 @@ decreased. The decision must use held-out behavior.
 
 ```text
 your-hybrid-project/
-|-- data/
-|   |-- knowledge_base/
-|   |-- training/
-|   `-- evaluation/
-|-- reports/
-|   `-- evaluation_report.md
-|-- src/
-|   |-- retrieval.py
-|   |-- training.py
-|   |-- generation.py
-|   `-- evaluation.py
-|-- tests/
-|-- .env.example
-|-- README.md
-`-- requirements.txt
+├── data/
+│   ├── knowledge_base/
+│   ├── training/
+│   └── evaluation/
+├── reports/
+│   └── evaluation_report.md
+├── src/
+│   ├── retrieval.py
+│   ├── training.py
+│   ├── generation.py
+│   └── evaluation.py
+├── tests/
+├── .env.example
+├── README.md
+├── pyproject.toml
+└── uv.lock
 ```
 
 ## Suggested Milestones
@@ -164,36 +163,36 @@ your-hybrid-project/
 
 Evidence to show:
 
-- validated training and evaluation records;
-- sample chunks with source metadata;
-- retrieval results for supported and unsupported questions; and
+- validated training and evaluation records,
+- sample chunks with source metadata,
+- retrieval results for supported and unsupported questions,
 - a documented threshold hypothesis.
 
 ### Milestone 2 - Adapter Training
 
 Evidence to show:
 
-- trainable parameter summary;
-- loss history;
-- adapter files saved separately from the base model; and
+- trainable parameter summary,
+- loss history,
+- adapter files saved separately from the base model,
 - a command that reloads the adapter for inference.
 
 ### Milestone 3 - Comparable Systems
 
 Evidence to show:
 
-- one baseline RAG response;
-- one hybrid response for the same question and evidence;
-- valid citations or a visible rejection outcome; and
+- one baseline RAG response,
+- one hybrid response for the same question and evidence,
+- valid citations or a visible rejection outcome,
 - a supported abstention example.
 
 ### Milestone 4 - Benchmark And Recommendation
 
 Evidence to show:
 
-- shared held-out benchmark;
-- aggregate and per-case comparison;
-- failure analysis; and
+- shared held-out benchmark,
+- aggregate and per-case comparison,
+- failure analysis,
 - a recommendation supported by measured results.
 
 ## Minimum Acceptance Checklist
@@ -209,9 +208,7 @@ Evidence to show:
 - [ ] The report analyzes failures and adapter trade-offs.
 - [ ] Tests pass from the documented environment.
 
-## Submission Questions
-
-Answer these questions in your README or evaluation report:
+## Answer the following questions
 
 1. Which held-out behaviors changed after loading the adapter?
 2. Did the adapter improve evidence use, style, both, or neither?

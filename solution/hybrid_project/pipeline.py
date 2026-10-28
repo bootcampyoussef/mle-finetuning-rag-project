@@ -2,6 +2,7 @@
 
 from .config import Settings
 from .generation import (
+    FALLBACK_ANSWER,
     Generator,
     citations_are_valid,
     citations_in,
@@ -16,9 +17,9 @@ class ComparisonPipeline:
     def __init__(
         self,
         settings: Settings,
-        retriever: Retriever,
-        base_generator: Generator,
-        lora_generator: Generator,
+        retriever: Retriever | None,
+        base_generator: Generator | None,
+        lora_generator: Generator | None,
     ) -> None:
         self.settings = settings
         self.retriever = retriever
@@ -29,15 +30,22 @@ class ComparisonPipeline:
         """Generate with the selected system and enforce RAG citations."""
 
         if system == "base-only":
+            if self.base_generator is None:
+                raise ValueError("The base generator was not loaded")
             answer_text = self.base_generator.generate(question, [])
             return Answer(
                 system=system,
                 question=question,
                 answer=answer_text,
-                status="answered",
+                status="abstained"
+                if answer_text.strip() == FALLBACK_ANSWER
+                else "answered",
+                raw_answer=answer_text,
                 citations=citations_in(answer_text),
             )
 
+        if self.retriever is None:
+            raise ValueError("RAG requires a loaded retriever")
         hits = self.retriever.search(question)
         retrieved_sources = list(dict.fromkeys(hit.document_id for hit in hits))
         top_score = hits[0].score if hits else None
@@ -46,16 +54,26 @@ class ComparisonPipeline:
             return Answer(
                 system=system,
                 question=question,
-                answer=(
-                    "The approved material is insufficient. Escalate for manual review."
-                ),
+                answer=FALLBACK_ANSWER,
                 status="abstained",
                 retrieved_sources=retrieved_sources,
                 top_score=top_score,
             )
 
         generator = self.base_generator if system == "rag-base" else self.lora_generator
+        if generator is None:
+            raise ValueError(f"The generator for {system} was not loaded")
         answer_text = generator.generate(question, accepted_hits)
+        if answer_text.strip() == FALLBACK_ANSWER:
+            return Answer(
+                system=system,
+                question=question,
+                answer=FALLBACK_ANSWER,
+                raw_answer=answer_text,
+                status="abstained",
+                retrieved_sources=retrieved_sources,
+                top_score=top_score,
+            )
         if not citations_are_valid(answer_text, accepted_hits):
             return Answer(
                 system=system,
@@ -65,6 +83,7 @@ class ComparisonPipeline:
                     "Escalate for manual review."
                 ),
                 status="invalid-citations",
+                raw_answer=answer_text,
                 retrieved_sources=retrieved_sources,
                 top_score=top_score,
             )
@@ -72,6 +91,7 @@ class ComparisonPipeline:
             system=system,
             question=question,
             answer=answer_text,
+            raw_answer=answer_text,
             status="answered",
             citations=citations_in(answer_text),
             retrieved_sources=retrieved_sources,

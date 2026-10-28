@@ -5,11 +5,9 @@ import re
 from typing import Protocol
 
 import numpy as np
-from numpy.typing import NDArray
 from sentence_transformers import SentenceTransformer
 
-
-VectorMatrix = NDArray[np.float32]
+VectorMatrix = np.ndarray[tuple[int, int], np.dtype[np.float32]]
 
 
 class Embedder(Protocol):
@@ -26,9 +24,9 @@ class Embedder(Protocol):
 class SentenceTransformerEmbedder:
     """Dense semantic vectors from a local Sentence Transformers model."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, revision: str | None = None) -> None:
         self.model_name = model_name
-        self._model = SentenceTransformer(model_name)
+        self._model = SentenceTransformer(model_name, revision=revision)
         probe = self._model.encode(
             ["embedding dimension probe"],
             normalize_embeddings=True,

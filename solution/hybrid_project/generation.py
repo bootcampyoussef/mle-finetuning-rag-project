@@ -1,25 +1,26 @@
 """Base and adapter-backed local answer generation."""
 
-from collections.abc import Sequence
+import hashlib
 import re
-from typing import Protocol
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Protocol, cast
 
-from peft import PeftModel
 import torch
+from peft import PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    PreTrainedModel,
     PreTrainedTokenizerBase,
 )
 
-from .config import Settings
-from .models import SearchHit
-from .prompts import evidence_text, inference_prompt
+if TYPE_CHECKING:
+    from transformers._typing import GenerativePreTrainedModel
 
+from .config import Settings
+from .models import SearchHit, TrainingSummary
+from .prompts import FALLBACK_ANSWER, evidence_text, inference_prompt
 
 CITATION_PATTERN = re.compile(r"\[([a-z0-9-]+)\]")
-FALLBACK_ANSWER = "The approved material is insufficient. Escalate for manual review."
 
 
 def citations_in(answer: str) -> list[str]:
@@ -34,6 +35,34 @@ def citations_are_valid(answer: str, hits: Sequence[SearchHit]) -> bool:
     citations = citations_in(answer)
     retrieved = {hit.document_id for hit in hits}
     return bool(citations) and set(citations).issubset(retrieved)
+
+
+def validate_adapter(settings: Settings) -> None:
+    """Reject stale or untraceable adapters before loading any model weights."""
+
+    summary_path = settings.adapter_path / "training_summary.json"
+    if not summary_path.exists():
+        raise FileNotFoundError(
+            "Adapter provenance is missing; run the training command."
+        )
+    try:
+        summary = TrainingSummary.model_validate_json(summary_path.read_bytes())
+    except ValueError as error:
+        raise ValueError(
+            "Adapter provenance is invalid; rerun the training command."
+        ) from error
+    if (summary.base_model, summary.base_model_revision) != (
+        settings.base_model,
+        settings.base_model_revision,
+    ):
+        raise ValueError(
+            "The base model or revision changed; rerun the training command."
+        )
+    if (
+        summary.training_sha256
+        != hashlib.sha256(settings.training_file.read_bytes()).hexdigest()
+    ):
+        raise ValueError("Training data changed; rerun the training command.")
 
 
 class Generator(Protocol):
@@ -53,25 +82,27 @@ class LocalModelGenerator:
     def __init__(self, settings: Settings, use_adapter: bool) -> None:
         self.settings = settings
         self.use_adapter = use_adapter
-        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
-            settings.base_model
+        if use_adapter:
+            validate_adapter(settings)
+        tokenizer = AutoTokenizer.from_pretrained(
+            settings.base_model, revision=settings.base_model_revision
         )
+        if not isinstance(tokenizer, PreTrainedTokenizerBase):
+            raise TypeError("The configured model did not return a tokenizer")
         self.tokenizer = tokenizer
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        base_model = AutoModelForCausalLM.from_pretrained(settings.base_model)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            settings.base_model, revision=settings.base_model_revision
+        )
         if use_adapter:
-            if not settings.adapter_path.exists():
-                raise FileNotFoundError(
-                    f"Adapter not found at {settings.adapter_path}. "
-                    "Run the training command first."
-                )
             adapter_model = PeftModel.from_pretrained(
                 base_model, str(settings.adapter_path)
             )
-            model: PreTrainedModel | PeftModel = adapter_model
+            model: GenerativePreTrainedModel | PeftModel = adapter_model
         else:
-            model = base_model
+            # AutoModelForCausalLM supplies the generative model contract.
+            model = cast("GenerativePreTrainedModel", base_model)
         self.model = model
         # Models load on CPU by default; derive the actual placement so inputs match.
         self.device = next(self.model.parameters()).device
@@ -95,10 +126,14 @@ class LocalModelGenerator:
         encoded = self.tokenizer(
             prompt,
             return_tensors="pt",
-            truncation=True,
-            max_length=self.settings.max_sequence_length,
+            add_special_tokens=False,
         )
         input_ids = encoded["input_ids"].to(self.device)
+        if input_ids.shape[1] > self.settings.max_sequence_length:
+            raise ValueError(
+                "Prompt exceeds MAX_SEQUENCE_LENGTH; shorten the evidence/question "
+                "or increase the limit. The question must not be truncated."
+            )
         attention_mask = encoded["attention_mask"].to(self.device)
         with torch.no_grad():
             generated = self.model.generate(
@@ -110,8 +145,10 @@ class LocalModelGenerator:
                 eos_token_id=self.tokenizer.eos_token_id,
             )
         new_tokens = generated[0, input_ids.shape[1] :]
-        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        return answer or FALLBACK_ANSWER
+        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        if not isinstance(answer, str):
+            raise TypeError("Decoding one answer must return a string")
+        return answer.strip() or FALLBACK_ANSWER
 
 
 class ExtractiveSmokeGenerator:

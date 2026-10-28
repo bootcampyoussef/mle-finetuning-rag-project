@@ -39,7 +39,7 @@ class VectorStore:
         points = [
             models.PointStruct(
                 id=str(uuid5(NAMESPACE_URL, chunk.chunk_id)),
-                vector=vector.tolist(),
+                vector=[float(value) for value in vector],
                 payload=chunk.model_dump(mode="json"),
             )
             for chunk, vector in zip(chunks, vectors, strict=True)

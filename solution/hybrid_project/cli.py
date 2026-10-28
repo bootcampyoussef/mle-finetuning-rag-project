@@ -1,7 +1,7 @@
 """Command-line workflow for data inspection, training, querying, and evaluation."""
 
-from dataclasses import replace
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -39,10 +39,12 @@ def _retriever(settings: Settings, hash_smoke: bool) -> Retriever:
     return Retriever(settings)
 
 
-def _pipeline(settings: Settings, hash_smoke: bool) -> ComparisonPipeline:
+def _pipeline(
+    settings: Settings, hash_smoke: bool, system: SystemName | None = None
+) -> ComparisonPipeline:
     """Assemble the comparison path with real or smoke generators."""
 
-    retriever = _retriever(settings, hash_smoke)
+    retriever = None if system == "base-only" else _retriever(settings, hash_smoke)
     if hash_smoke:
         return ComparisonPipeline(
             settings,
@@ -53,8 +55,12 @@ def _pipeline(settings: Settings, hash_smoke: bool) -> ComparisonPipeline:
     return ComparisonPipeline(
         settings,
         retriever,
-        LocalModelGenerator(settings, use_adapter=False),
-        LocalModelGenerator(settings, use_adapter=True),
+        LocalModelGenerator(settings, use_adapter=False)
+        if system != "rag-lora"
+        else None,
+        LocalModelGenerator(settings, use_adapter=True)
+        if system in (None, "rag-lora")
+        else None,
     )
 
 
@@ -102,9 +108,14 @@ def index(context: click.Context) -> None:
 
 
 @main.command()
-def train() -> None:
+@click.pass_context
+def train(context: click.Context) -> None:
     """Run real LoRA optimization and save the adapter."""
 
+    if context.obj["hash_smoke"]:
+        raise click.UsageError(
+            "--hash-smoke cannot be used with train; training is real."
+        )
     summary = train_adapter(Settings.from_env())
     click.echo(json.dumps(summary.model_dump(mode="json"), indent=2))
 
@@ -128,8 +139,9 @@ def ask(
 
     hash_smoke = bool(context.obj["hash_smoke"])
     settings = _settings(hash_smoke)
-    pipeline = _pipeline(settings, hash_smoke)
-    result = pipeline.answer(question, cast(SystemName, system_name))
+    system = cast(SystemName, system_name)
+    pipeline = _pipeline(settings, hash_smoke, system)
+    result = pipeline.answer(question, system)
     click.echo(json.dumps(result.model_dump(mode="json"), indent=2))
 
 
@@ -137,15 +149,21 @@ def ask(
 @click.option(
     "--output",
     type=click.Path(path_type=Path),
-    default=Path("solution/reports/reference_evaluation.md"),
-    show_default=True,
+    help="Report path; defaults to reference_evaluation.md (smoke_evaluation.md in smoke mode) under solution/reports.",
 )
 @click.pass_context
-def evaluate(context: click.Context, output: Path) -> None:
+def evaluate(context: click.Context, output: Path | None) -> None:
     """Run the complete shared benchmark and write its decision report."""
 
     hash_smoke = bool(context.obj["hash_smoke"])
     settings = _settings(hash_smoke)
+    reports = settings.project_root / "solution" / "reports"
+    reference = reports / "reference_evaluation.md"
+    output = output or (reports / "smoke_evaluation.md" if hash_smoke else reference)
+    if hash_smoke and output.with_suffix(".md").resolve() == reference.resolve():
+        raise click.UsageError(
+            "Smoke results must not overwrite the reference report or its trace."
+        )
     summary = write_report(_pipeline(settings, hash_smoke), output)
     rag_base = next(system for system in summary.systems if system.system == "rag-base")
     rag_lora = next(system for system in summary.systems if system.system == "rag-lora")
