@@ -80,6 +80,22 @@
     "should_abstain": false
   },
   {
+    "id": "eval-bank-chargeback",
+    "question": "How many days will my external bank take to resolve a chargeback for a duplicate payment?",
+    "expected_sources": [],
+    "required_terms": [],
+    "forbidden_terms": [],
+    "should_abstain": true
+  },
+  {
+    "id": "eval-shipping-compensation",
+    "question": "What compensation amount is guaranteed if express shipping arrives late?",
+    "expected_sources": [],
+    "required_terms": [],
+    "forbidden_terms": [],
+    "should_abstain": true
+  },
+  {
     "id": "eval-cafeteria",
     "question": "Where can I find next week's cafeteria menu?",
     "expected_sources": [],

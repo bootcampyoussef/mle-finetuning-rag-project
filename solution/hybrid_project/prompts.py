@@ -7,17 +7,19 @@ from transformers import PreTrainedTokenizerBase
 from .models import SearchHit, TrainingExample
 
 ANSWER_MARKER = "### Support answer\n"
+FALLBACK_ANSWER = "The approved material is insufficient. Escalate for manual review."
 SYSTEM_INSTRUCTION = (
     "Answer only from approved context. Start with the direct answer, then "
     "give the next action. Cite every policy claim with source IDs in square "
-    "brackets. If the context is insufficient, say so."
+    "brackets. If the context is insufficient, reply exactly: "
+    f"{FALLBACK_ANSWER}"
 )
 
 
 def evidence_text(hits: Sequence[SearchHit]) -> str:
     """Render retrieved chunks with visible source IDs."""
 
-    return "\n\n".join(f"[{hit.document_id}] {hit.title}\n{hit.text}" for hit in hits)
+    return "\n".join(f"[{hit.document_id}] {hit.text}" for hit in hits)
 
 
 def build_prompt(question: str, evidence: str) -> str:

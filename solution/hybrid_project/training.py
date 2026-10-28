@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from time import perf_counter
 
 import torch
 from peft import LoraConfig, TaskType, get_peft_model
@@ -50,14 +51,12 @@ def _encoded_example(
     encoded: BatchEncoding = tokenizer(
         full_text,
         return_tensors="pt",
-        truncation=True,
-        max_length=max_length,
+        add_special_tokens=False,
     )
     prompt_tokens: BatchEncoding = tokenizer(
         prompt,
         return_tensors="pt",
-        truncation=True,
-        max_length=max_length,
+        add_special_tokens=False,
     )
     input_ids = encoded.get("input_ids")
     attention_mask = encoded.get("attention_mask")
@@ -68,14 +67,20 @@ def _encoded_example(
         raise TypeError("Tokenizer did not return a tensor attention_mask")
     if not isinstance(prompt_input_ids, torch.Tensor):
         raise TypeError("Tokenizer did not return prompt input_ids")
+    if input_ids.shape[1] > max_length:
+        raise ValueError(
+            f"Training example {example.id} exceeds MAX_SEQUENCE_LENGTH; "
+            "increase the limit or shorten the example rather than truncate its answer."
+        )
+    if not torch.equal(input_ids[:, : prompt_input_ids.shape[1]], prompt_input_ids):
+        raise ValueError(
+            "Training text must start with the exact inference prompt tokens"
+        )
     labels = input_ids.clone()
     prompt_length = min(prompt_input_ids.shape[1], labels.shape[1])
     labels[:, :prompt_length] = -100
     if bool(torch.all(labels == -100)):
-        raise ValueError(
-            "The sequence length removed every answer token; increase "
-            "MAX_SEQUENCE_LENGTH or shorten the example."
-        )
+        raise ValueError("The training example has no supervised answer tokens.")
     return input_ids, attention_mask, labels
 
 
@@ -109,8 +114,13 @@ def train_adapter(settings: Settings) -> TrainingSummary:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Validate and tokenize this small dataset once, before loading model weights.
+    encoded_examples = [
+        _encoded_example(tokenizer, example, settings.max_sequence_length)
+        for example in examples
+    ]
     base_model = AutoModelForCausalLM.from_pretrained(
-        settings.base_model, revision=settings.base_model_revision
+        settings.base_model, revision=settings.base_model_revision, dtype=torch.float32
     )
     # Some tiny checkpoint configs omit this value even though the model is causal.
     base_model.loss_type = "ForCausalLM"
@@ -133,15 +143,11 @@ def train_adapter(settings: Settings) -> TrainingSummary:
     )
 
     epoch_losses: list[float] = []
+    started = perf_counter()
     model.train()
     for _epoch in range(settings.train_epochs):
         running_loss = 0.0
-        for example in examples:
-            input_ids, attention_mask, labels = _encoded_example(
-                tokenizer,
-                example,
-                settings.max_sequence_length,
-            )
+        for input_ids, attention_mask, labels in encoded_examples:
             outputs = model(
                 input_ids=input_ids.to(device),
                 attention_mask=attention_mask.to(device),
@@ -170,14 +176,16 @@ def train_adapter(settings: Settings) -> TrainingSummary:
         learning_rate=settings.learning_rate,
         max_sequence_length=settings.max_sequence_length,
         lora_target_modules=target_modules,
-        lora_rank=8,
-        lora_alpha=16,
-        lora_dropout=0.05,
+        lora_rank=lora_config.r,
+        lora_alpha=lora_config.lora_alpha,
+        lora_dropout=lora_config.lora_dropout,
         random_seed=settings.random_seed,
         trainable_parameters=trainable,
         total_parameters=total,
         trainable_percentage=100 * trainable / total,
         epoch_losses=epoch_losses,
+        training_seconds=perf_counter() - started,
+        training_device=str(device),
     )
     summary_path = settings.adapter_path / "training_summary.json"
     summary_path.write_text(

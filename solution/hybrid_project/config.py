@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -33,6 +34,24 @@ class Settings:
     random_seed: int
     base_model_revision: str | None = None
     embedding_revision: str | None = None
+
+    def __post_init__(self) -> None:
+        """Reject invalid controls before loading models or writing artifacts."""
+
+        for name, value in (
+            ("TOP_K", self.top_k),
+            ("MAX_SEQUENCE_LENGTH", self.max_sequence_length),
+            ("MAX_NEW_TOKENS", self.max_new_tokens),
+            ("TRAIN_EPOCHS", self.train_epochs),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} must be positive")
+        if not isfinite(self.learning_rate) or self.learning_rate <= 0:
+            raise ValueError("LEARNING_RATE must be finite and positive")
+        if not -1 <= self.min_score <= 1:
+            raise ValueError("MIN_SCORE must be a finite cosine score between -1 and 1")
+        if not 0 <= self.random_seed < 2**32:
+            raise ValueError("RANDOM_SEED must be between 0 and 2**32 - 1")
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "Settings":

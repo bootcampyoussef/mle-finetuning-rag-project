@@ -18,10 +18,9 @@ if TYPE_CHECKING:
 
 from .config import Settings
 from .models import SearchHit, TrainingSummary
-from .prompts import evidence_text, inference_prompt
+from .prompts import FALLBACK_ANSWER, evidence_text, inference_prompt
 
 CITATION_PATTERN = re.compile(r"\[([a-z0-9-]+)\]")
-FALLBACK_ANSWER = "The approved material is insufficient. Escalate for manual review."
 
 
 def citations_in(answer: str) -> list[str]:
@@ -127,10 +126,14 @@ class LocalModelGenerator:
         encoded = self.tokenizer(
             prompt,
             return_tensors="pt",
-            truncation=True,
-            max_length=self.settings.max_sequence_length,
+            add_special_tokens=False,
         )
         input_ids = encoded["input_ids"].to(self.device)
+        if input_ids.shape[1] > self.settings.max_sequence_length:
+            raise ValueError(
+                "Prompt exceeds MAX_SEQUENCE_LENGTH; shorten the evidence/question "
+                "or increase the limit. The question must not be truncated."
+            )
         attention_mask = encoded["attention_mask"].to(self.device)
         with torch.no_grad():
             generated = self.model.generate(

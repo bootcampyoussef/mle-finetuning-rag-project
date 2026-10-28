@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .documents import load_documents
+from .generation import citations_in
 from .models import DataSummary, EvaluationCase, TrainingExample
 
 
@@ -70,6 +71,10 @@ def validate_data(settings_path: tuple[Path, Path, Path]) -> DataSummary:
         ):
             raise ValueError(
                 f"Training example {example.id} context must label every source ID"
+            )
+        if not set(citations_in(example.answer)).issubset(example.reference_ids):
+            raise ValueError(
+                f"Training example {example.id} answer cites a source absent from its context"
             )
 
     for case in cases:

@@ -83,6 +83,8 @@ class TrainingSummary(BaseModel):
     total_parameters: int
     trainable_percentage: float
     epoch_losses: list[float]
+    training_seconds: float | None = None
+    training_device: str | None = None
 
 
 class Answer(BaseModel):
@@ -92,6 +94,7 @@ class Answer(BaseModel):
     question: str
     answer: str
     status: AnswerStatus
+    raw_answer: str | None = None
     citations: list[str] = Field(default_factory=list)
     retrieved_sources: list[str] = Field(default_factory=list)
     top_score: float | None = None
@@ -116,6 +119,8 @@ class SystemEvaluationRow(BaseModel):
     status: AnswerStatus
     answer: str
     citations: list[str]
+    raw_answer: str | None = None
+    raw_relevance: float | None = None
     relevance: float
     faithful: bool
     style_compliance: float

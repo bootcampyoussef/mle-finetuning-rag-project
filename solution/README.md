@@ -42,10 +42,12 @@ Follow the [main README setup](../README.md#setup), then run every command below
 uv run python -m solution.hybrid_project inspect-data
 ```
 
-This confirms that training and held-out records reference real policy sources
-and that evaluation questions were not copied into training.
+This checks source IDs, target citations, and exact question duplicates. Some
+evaluation scenarios still overlap with training: this is a within-domain check,
+not a claim of generalization to unseen policies. Two near-domain unsupported
+cases check that retrieval similarity is not confused with answerability.
 
-### 2. Build The Shared Index
+### 2. Check The Shared Index
 
 ```bash
 uv run python -m solution.hybrid_project index
@@ -53,6 +55,9 @@ uv run python -m solution.hybrid_project index
 
 The command downloads the configured embedding model on first use, creates
 paragraph-aware chunks, and indexes them in Qdrant local mode.
+Each command rebuilds this small index, including when persistent storage is
+configured; the default in-memory index disappears on exit. This step verifies
+indexing, rather than creating a cache for subsequent commands.
 
 ### 3. Train The LoRA Adapter
 
@@ -66,6 +71,9 @@ records the base-model revision and the SHA-256 of the exact training bytes.
 Generation rejects adapters with missing provenance, changed training data, or
 a different base model/revision: rerun `train` in those cases. Existing legacy
 adapters must also be retrained. Generated weights remain ignored by Git.
+Overlength training examples and inference prompts raise an explicit error;
+shorten the evidence or increase `MAX_SEQUENCE_LENGTH` rather than silently
+losing the question or part of the answer.
 
 ### 4. Compare One Question
 
@@ -81,6 +89,8 @@ uv run python -m solution.hybrid_project ask \
 
 Both systems receive the same retrieved chunks. The second command changes only
 the model by loading the adapter.
+Each `ask` command loads only the requested model; `rag-base` works before
+training an adapter, and `base-only` also skips retrieval.
 
 ### 5. Generate The Evaluation Report
 
@@ -91,7 +101,11 @@ uv run python -m solution.hybrid_project evaluate
 This writes
 [reference_evaluation.md](reports/reference_evaluation.md) and a regenerated
 JSON trace. The report separates shared retrieval metrics from each system's
-answer metrics.
+answer metrics. It also preserves raw generated answers in the JSON trace and
+compares their lexical coverage with citation rejections. Rejected text is for
+inspection only, never a validated answer. The rubric cannot establish semantic
+correctness; manually inspect failures and policy-change cases before concluding
+that LoRA improves reasoning rather than citation format.
 
 ### 6. Run Tests
 
@@ -114,6 +128,8 @@ uv run python -m solution.hybrid_project --hash-smoke evaluate \
 
 Smoke mode is for development only. The submitted decision report must come
 from the real dense retriever and real base/adapter model paths.
+Without `--output`, smoke evaluation writes `smoke_evaluation.md`, never the
+reference report. `--hash-smoke train` is rejected because training is real.
 
 ## Implementation Decisions
 

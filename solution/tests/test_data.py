@@ -29,7 +29,22 @@ def test_shared_data_is_valid_and_auditable() -> None:
 
     assert summary.source_count == 6
     assert summary.training_example_count == 16
-    assert summary.evaluation_case_count == 12
+    assert summary.evaluation_case_count == 14
+
+
+def test_target_citations_must_be_provided(tmp_path: Path) -> None:
+    """A valid corpus source is not enough: it must be present in this example."""
+
+    settings = Settings.from_env()
+    records = [
+        json.loads(line) for line in settings.training_file.read_text().splitlines()
+    ]
+    records[-1]["reference_ids"] = ["response-style"]
+    records[-1]["context"] = "[response-style] Cite policy claims."
+    training = tmp_path / "training.jsonl"
+    training.write_text("\n".join(json.dumps(record) for record in records))
+    with pytest.raises(ValueError, match="answer cites a source absent"):
+        validate_data((settings.knowledge_base_dir, training, settings.evaluation_file))
 
 
 def test_chunks_retain_source_identity_and_position() -> None:

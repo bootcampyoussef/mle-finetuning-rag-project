@@ -34,9 +34,3 @@ class Retriever:
         limit = top_k or self.settings.top_k
         query_vector = self.embedder.encode([question])[0].tolist()
         return self.store.search(query_vector, limit=limit)
-
-    def accepted(self, question: str) -> list[SearchHit]:
-        """Return only evidence that meets the shared answer threshold."""
-
-        hits = self.search(question)
-        return [hit for hit in hits if hit.score >= self.settings.min_score]
